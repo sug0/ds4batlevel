@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
     FD_SET(fd, &rfds);
 
     for (;;) {
-        const int ret = select(1, &rfds, NULL, NULL, &tv);
+        const int ret = select(1, &rfds, NULL, NULL, &wait_time);
 
         switch (ret) {
         case -1:
