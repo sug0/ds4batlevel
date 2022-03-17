@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <sys/select.h>
 #include <libnotify/notify.h>
 
@@ -125,4 +128,13 @@ static void init(int argc, char *argv[])
 static void cleanup(void)
 {
     notify_uninit();
+}
+
+static int read_battery_level(int fd)
+{
+    static char buf[8];
+    const ssize_t n = read(fd, buf, sizeof(buf));
+    lseek(fd, 0, SEEK_SET);
+    buf[n] = '\0';
+    return atoi(buf);
 }
