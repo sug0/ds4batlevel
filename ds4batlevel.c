@@ -3,12 +3,17 @@
 #include <signal.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <libnotify/notify.h>
 
+#include "config.h"
+
 enum Urgency {
-    /* 20% */
+    /* >15% */
+    DS4_HEALTHY,
+    /* 15% */
     DS4_LOW,
     /* 10% */
     DS4_LOWER,
@@ -16,17 +21,21 @@ enum Urgency {
     DS4_DEPLETED,
 };
 
-static void init(void);
+static char *argv0;
+static int ds4_fd = -1;
+
+static void init(int argc, char *argv[]);
 static void cleanup(void);
 static void handlesig(int signo);
 static void notify(enum Urgency u);
 static const char *get_urgency_str(enum Urgency u);
-static time get_urgency_timeout(enum Urgency u);
-static int read_battery_level(int fd);
+static int get_urgency_timeout(enum Urgency u);
+static int read_battery_level(void);
+static enum Urgency get_battery_urgency(void);
 
 /* max wait time between polls */
-const struct timeval wait_time = {
-    .tv_sec = 30,
+static struct timeval wait_time = {
+    .tv_sec = 60,
     .tv_usec = 0,
 };
 
@@ -35,11 +44,10 @@ int main(int argc, char *argv[])
     init(argc, argv);
 
     /* setup file descriptor */
-    int fd = -1; /* TODO: open /sys/class/power_supply/<id>/capacity */
     fd_set rfds;
 
-    FD_ZERO(&rfds)
-    FD_SET(fd, &rfds);
+    FD_ZERO(&rfds);
+    FD_SET(ds4_fd, &rfds);
 
     for (;;) {
         const int ret = select(1, &rfds, NULL, NULL, &wait_time);
@@ -49,8 +57,12 @@ int main(int argc, char *argv[])
         case 0:
             /* ignore no data or errors */
             break;
-        default:
-            const int level = read_battery_level(fd);
+        }
+
+        const enum Urgency u = get_battery_urgency();
+
+        if (u != DS4_HEALTHY) {
+            notify(u);
         }
     }
 }
@@ -60,6 +72,7 @@ static void notify(enum Urgency u)
     NotifyNotification *n = notify_notification_new(
         "Dual Shock 4", 
         get_urgency_str(u),
+        "input-gamepad"
     );
 
     notify_notification_set_timeout(n, get_urgency_timeout(u));
@@ -67,7 +80,9 @@ static void notify(enum Urgency u)
 
     if (!notify_notification_show(n, 0)) {
         /* well... what now?
-         * do nothing I suppose. */
+         * abort, I suppose. */
+        fprintf(stderr, "%s: failed to show notification to the user\n", argv0);
+        exit(1);
     }
 }
 
@@ -75,15 +90,15 @@ static const char *get_urgency_str(enum Urgency u)
 {
     switch (u) {
     case DS4_LOW:
-        return "Battery is at 20%.";
+        return "Battery is low (10%-15%).";
     case DS4_LOWER:
-        return "Battery is at 10%!";
+        return "Battery is very low (5%-10%)!";
     case DS4_DEPLETED:
-        return "Battery is at 5%!";
+        return "Battery is almost depleted (<5%)!";
     }
 }
 
-static time get_urgency_timeout(enum Urgency u)
+static int get_urgency_timeout(enum Urgency u)
 {
 #define SECS(N) ((N) * 1000)
 
@@ -111,12 +126,21 @@ static void init(int argc, char *argv[])
 {
     (void)argc;
 
+    argv0 = argv[0];
+
     if (!notify_init("ds4batlevel")) {
-        fprintf(stderr, "%s: failed to initialize notifications\n", argv[0]);
+        fprintf(stderr, "%s: failed to initialize notifications\n", argv0);
         exit(1);
     }
 
     atexit(cleanup);
+
+    ds4_fd = open(DS4_PATH, 0400, O_RDONLY);
+
+    if (ds4_fd == -1) {
+        fprintf(stderr, "%s: failed to open dual shock 4 path: %s\n", argv0, DS4_PATH);
+        exit(1);
+    }
 
     /* install signal handlers; ignore return value for now lol */
     signal(SIGINT, handlesig);
@@ -128,13 +152,32 @@ static void init(int argc, char *argv[])
 static void cleanup(void)
 {
     notify_uninit();
+
+    if (ds4_fd != -1) {
+        close(ds4_fd);
+    }
 }
 
-static int read_battery_level(int fd)
+static int read_battery_level(void)
 {
     static char buf[8];
-    const ssize_t n = read(fd, buf, sizeof(buf));
-    lseek(fd, 0, SEEK_SET);
+    const ssize_t n = read(ds4_fd, buf, sizeof(buf));
+    lseek(ds4_fd, 0, SEEK_SET);
     buf[n] = '\0';
     return atoi(buf);
+}
+
+static enum Urgency get_battery_urgency(void)
+{
+    const int level = read_battery_level();
+
+    if (level >= 15) {
+        return DS4_HEALTHY;
+    } else if (level >= 10 && level < 15) {
+        return DS4_LOW;
+    } else if (level >= 5 && level < 10) {
+        return DS4_LOWER;
+    } else {
+        return DS4_DEPLETED;
+    }
 }
