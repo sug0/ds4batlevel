@@ -1,0 +1,22 @@
+ds4batlevel
+===========
+
+A very simple program to monitor the battery level of a Dual Shock 4
+controller in Linux systems.
+
+compiling
+---------
+
+$ cc -O1 -o ds4batlevel ds4batlevel.c `pkgconf --libs --cflags libnotify`
+
+configuring
+-----------
+
+Look for the Dual Shock 4 controller in `/sys/class/power_supply`, then
+append `capacity` to the path.
+
+For instance:
+
+/sys/class/power_supply/sony_controller_battery_1c:66:6d:d0:1e:b9/capacity
+
+Then copy `config.def.h` and edit the path appropriately.
