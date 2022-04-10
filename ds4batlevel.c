@@ -62,13 +62,16 @@ static void notify(enum Urgency u)
         "input-gamepad"
     );
 
+    GError *err = NULL;
+
     notify_notification_set_timeout(n, get_urgency_timeout(u));
     notify_notification_set_urgency(n, NOTIFY_URGENCY_CRITICAL);
 
-    if (!notify_notification_show(n, 0)) {
+    if (!notify_notification_show(n, &err)) {
         /* well... what now?
          * abort, I suppose. */
-        fprintf(stderr, "%s: failed to show notification to the user\n", argv0);
+        fprintf(stderr, "%s: failed to show notification to the user: %s\n", argv0, err->message);
+        g_error_free(err);
         exit(1);
     }
 }
