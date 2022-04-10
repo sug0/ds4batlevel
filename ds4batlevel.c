@@ -5,8 +5,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <sys/types.h>
-#include <sys/select.h>
+#include <time.h>
 #include <libnotify/notify.h>
 
 #include "config.h"
@@ -35,36 +34,23 @@ static int read_battery_level(void);
 static enum Urgency get_battery_urgency(void);
 
 /* max wait time between polls */
-static struct timeval wait_time = {
+const struct timespec wait_time = {
     .tv_sec = 60,
-    .tv_usec = 0,
+    .tv_nsec = 0,
 };
 
 int main(int argc, char *argv[]) 
 {
     init(argc, argv);
 
-    /* setup file descriptor */
-    fd_set rfds;
-
-    FD_ZERO(&rfds);
-    FD_SET(ds4_fd, &rfds);
-
     for (;;) {
-        const int ret = select(1, &rfds, NULL, NULL, &wait_time);
-
-        switch (ret) {
-        case -1:
-        case 0:
-            /* ignore no data or errors */
-            break;
-        }
-
         const enum Urgency u = get_battery_urgency();
 
         if (u != DS4_HEALTHY) {
             notify(u);
         }
+
+        nanosleep(&wait_time, NULL);
     }
 }
 
