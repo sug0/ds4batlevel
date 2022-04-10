@@ -4,6 +4,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <libnotify/notify.h>
@@ -162,6 +163,10 @@ static int read_battery_level(void)
 {
     static char buf[8];
     const ssize_t n = read(ds4_fd, buf, sizeof(buf));
+    if (n == -1) {
+        fprintf(stderr, "%s: failed to read battery level: %s\n", argv0, strerror(errno));
+        exit(1);
+    }
     lseek(ds4_fd, 0, SEEK_SET);
     buf[n] = '\0';
     return atoi(buf);
