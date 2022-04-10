@@ -19,4 +19,4 @@ For instance:
 
 /sys/class/power_supply/sony_controller_battery_1c:66:6d:d0:1e:b9/capacity
 
-Then copy `config.def.h` and edit the path appropriately.
+Then copy `config.def.h` into `config.h` and edit the path appropriately.
